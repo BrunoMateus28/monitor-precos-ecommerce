@@ -1,0 +1,13 @@
+repos:
+-   repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+    -   id: trailing-whitespace      # Remove espaços em branco sobrando no fim das linhas
+    -   id: end-of-file-fixer        # Garante que todo arquivo termine com uma linha vazia
+    -   id: check-yaml               # Valida se seus arquivos YAML estão bem escritos
+    -   id: detect-private-key       # BLOQUEIA o commit se você vazar chaves ou senhas
+
+-   repo: https://github.com/psf/black
+    rev: 24.2.0
+    hooks:
+    -   id: black                    # Formata o seu código Python automaticamente no padrão PEP8
