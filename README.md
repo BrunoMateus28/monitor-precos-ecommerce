@@ -1,8 +1,8 @@
 # 🛒 Serverless Price Monitor Pipeline
 
-Um pipeline de dados autônomo e de custo zero (Serverless) desenvolvido para extrair, armazenar e alertar sobre flutuações de preços em e-commerces.
+Um pipeline de dados autônomo e de custo zero (Serverless) desenvolvido para extrair, armazenar e monitorar flutuações de preços em e-commerces, focado em alertas inteligentes de oportunidades para skincare e produtos de consumo.
 
-Este projeto demonstra a aplicação prática de Engenharia de Dados, CI/CD e Web Scraping resiliente, utilizando metadados estruturados para evitar quebras por mudanças de layout visual nos sites.
+Este projeto demonstra a aplicação prática de Engenharia de Dados, CI/CD, Web Scraping resiliente e análise de séries temporais em bancos relacionais leves.
 
 ## 🏗️ Arquitetura do Projeto
 
@@ -10,16 +10,18 @@ O sistema foi desenhado para rodar 100% na nuvem sem necessidade de infraestrutu
 
 * **Orquestração & CI/CD:** GitHub Actions (Cron Jobs)
 * **Extração de Dados:** Python (`requests`, `BeautifulSoup`, JSON-LD)
-* **Armazenamento:** SQLite3 (Persistido via automação no próprio repositório)
-* **Mensageria:** API do Telegram
+* **Armazenamento:** SQLite3 local persistido com histórico de preços relacional
+* **Mensageria:** API do Telegram para alertas em tempo real
 
-## ⚙️ Fluxo de Execução (ETL)
+## ⚙️ Fluxo de Execução (ETL) & Inteligência de Alerta
 
-1. **Extract (Extração Resiliente):** O script lê uma lista de URLs cadastradas no banco de dados e faz requisições HTTP. Em vez de depender de seletores CSS frágeis, o motor busca por tags de dados estruturados padronizadas pelo mercado (`Schema.org/Product` via `JSON-LD` ou metadados genéricos `Open Graph`). Isso torna o scraper universal para quase qualquer loja virtual.
-2. **Transform (Limpeza):** Os dados retornados são parseados e sanitizados (remoção de caracteres não numéricos e padronização de casas decimais) usando expressões regulares (RegEx).
-3. **Load (Carga):** O preço histórico e a data da coleta são inseridos de forma relacional no banco de dados `monitor_precos.db`.
-4. **Alert (Regra de Negócio):** Se o preço coletado for menor ou igual ao preço alvo definido pelo usuário, um payload é enviado para o Bot do Telegram, notificando a queda de preço em tempo real com o link direto de compra.
-5. **State Persistence:** Para manter o custo de nuvem zerado, o fluxo do GitHub Actions comita silenciosamente o arquivo `.db` atualizado de volta no repositório ao fim de cada execução.
+1. **Extract (Extração Resiliente):** O script lê uma lista de URLs curadas cadastradas no banco e faz requisições HTTP utilizando rotação de User-Agents para evitar bloqueios. O motor busca por tags de dados estruturados padronizadas (`Schema.org/Product` via `JSON-LD`) ou seletores de fallback.
+2. **Transform (Limpeza):** Os valores brutos coletados são parseados e sanitizados com expressões regulares (RegEx) para garantir o formato numérico correto em reais (BRL).
+3. **Load (Carga):** A nova medição é registrada na tabela de histórico de preços do banco `database.db`.
+4. **Alert (Regras de Negócio Inteligentes):** O banco de dados avalia o comportamento histórico do produto. O alerta via Telegram só é disparado se o preço atual atender simultaneamente aos critérios de oportunidade:
+   * Estar **abaixo da média de preço dos últimos 30 dias**;
+   * Estar **mais barato do que o último registro salvo** (evitando falsos positivos e garantindo tendência de queda real).
+5. **State Persistence:** Para manter o custo de nuvem zerado, o fluxo do GitHub Actions comita o arquivo do banco de dados atualizado de volta no repositório ao fim de cada ciclo.
 
 ## 🚀 Como Executar Localmente
 
@@ -30,7 +32,7 @@ O sistema foi desenhado para rodar 100% na nuvem sem necessidade de infraestrutu
 ### Passos
 1. Clone o repositório:
 ```bash
-git clone https://github.com/BrunoMateus28/monitor-precos-ecommerce.git
+git clone [https://github.com/BrunoMateus28/monitor-precos-ecommerce.git](https://github.com/BrunoMateus28/monitor-precos-ecommerce.git)
 cd monitor-precos-ecommerce
 
 ```
