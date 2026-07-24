@@ -1,89 +1,140 @@
 import sqlite3
-from typing import List, Tuple, Dict, Any
-
-DB_NAME = "monitor_precos.db"
+from datetime import datetime, timedelta
 
 
-def conectar_banco() -> sqlite3.Connection:
-    return sqlite3.connect(DB_NAME)
+def conectar_banco():
+    return sqlite3.connect("database.db")
 
 
-def inicializar_banco() -> None:
-    """Cria as tabelas do sistema seguindo a convenção de banco minúsculo e tabela maiúscula."""
-    conexao = conectar_banco()
-    cursor = conexao.cursor()
-
-    # Tabela de Produtos Cadastrados
+def inicializar_banco():
+    conn = conectar_banco()
+    cursor = conn.cursor()
     cursor.execute(
         """
-    CREATE TABLE IF NOT EXISTS PRODUTOS_CADASTRADOS (
-        id_produto INTEGER PRIMARY KEY AUTOINCREMENT,
-        nome_produto TEXT NOT NULL,
-        url_produto TEXT NOT NULL UNIQUE,
-        preco_alvo REAL NOT NULL,
-        ativo BOOLEAN DEFAULT 1
-    )
+        CREATE TABLE IF NOT EXISTS produtos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT NOT NULL,
+            url TEXT UNIQUE NOT NULL
+        )
     """
     )
-
-    # Tabela de Histórico de Preços
     cursor.execute(
         """
-    CREATE TABLE IF NOT EXISTS HISTORICO_PRECOS (
-        id_historico INTEGER PRIMARY KEY AUTOINCREMENT,
-        id_produto INTEGER NOT NULL,
-        preco_coletado REAL NOT NULL,
-        data_coleta TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (id_produto) REFERENCES PRODUTOS_CADASTRADOS (id_produto)
-    )
+        CREATE TABLE IF NOT EXISTS historico_precos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            produto_id INTEGER,
+            preco REAL NOT NULL,
+            data_coleta TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (produto_id) REFERENCES produtos (id)
+        )
     """
     )
+    conn.commit()
+    conn.close()
 
-    conexao.commit()
-    conexao.close()
 
-
-def inserir_produto_teste(nome: str, url: str, preco_alvo: float) -> None:
-    """Insere um produto inicial se a URL ainda não existir."""
-    conexao = conectar_banco()
-    cursor = conexao.cursor()
+def inserir_produto_teste(nome, url):
+    conn = conectar_banco()
+    cursor = conn.cursor()
     cursor.execute(
         """
-    INSERT OR IGNORE INTO PRODUTOS_CADASTRADOS (nome_produto, url_produto, preco_alvo)
-    VALUES (?, ?, ?)
+        INSERT OR IGNORE INTO produtos (nome, url)
+        VALUES (?, ?)
     """,
-        (nome, url, preco_alvo),
+        (nome, url),
     )
-    conexao.commit()
-    conexao.close()
+    conn.commit()
+    conn.close()
 
 
-def buscar_produtos_ativos() -> List[Tuple[int, str, str, float]]:
-    """Retorna a lista de produtos ativos para monitoramento."""
-    conexao = conectar_banco()
-    cursor = conexao.cursor()
-    cursor.execute(
-        """
-    SELECT id_produto, nome_produto, url_produto, preco_alvo
-    FROM PRODUTOS_CADASTRADOS
-    WHERE ativo = 1
-    """
-    )
+def buscar_produtos_ativos():
+    conn = conectar_banco()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, nome, url FROM produtos")
     produtos = cursor.fetchall()
-    conexao.close()
+    conn.close()
     return produtos
 
 
-def registrar_historico(id_produto: int, preco: float) -> None:
-    """Registra uma nova medição de preço no histórico."""
-    conexao = conectar_banco()
-    cursor = conexao.cursor()
+def registrar_historico(produto_id, preco):
+    conn = conectar_banco()
+    cursor = conn.cursor()
     cursor.execute(
         """
-    INSERT INTO HISTORICO_PRECOS (id_produto, preco_coletado)
-    VALUES (?, ?)
+        INSERT INTO historico_precos (produto_id, preco)
+        VALUES (?, ?)
     """,
-        (id_produto, preco),
+        (produto_id, preco),
     )
-    conexao.commit()
-    conexao.close()
+    conn.commit()
+    conn.close()
+
+
+def verificar_alertas(produto_id, preco_atual):
+    """Valida os alertas comparando com o histórico anterior (ignorando o registro inserido no momento)."""
+    conn = conectar_banco()
+    cursor = conn.cursor()
+
+    # 1. Menor preço histórico (ignorando o preço atual que acabou de entrar, se já foi inserido)
+    cursor.execute(
+        """
+        SELECT MIN(preco) FROM historico_precos
+        WHERE produto_id = ? AND id NOT IN (
+            SELECT id FROM historico_precos WHERE produto_id = ? ORDER BY data_coleta DESC LIMIT 1
+        )
+    """,
+        (produto_id, produto_id),
+    )
+    resultado_min = cursor.fetchone()
+    menor_historico = (
+        resultado_min[0]
+        if resultado_min and resultado_min[0] is not None
+        else preco_atual
+    )
+
+    # 2. Média de preço dos últimos 30 dias
+    trinta_dias_atras = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+    cursor.execute(
+        """
+        SELECT AVG(preco) FROM historico_precos
+        WHERE produto_id = ? AND data_coleta >= ?
+    """,
+        (produto_id, trinta_dias_atras),
+    )
+    resultado_avg = cursor.fetchone()
+    media_30d = (
+        resultado_avg[0]
+        if resultado_avg and resultado_avg[0] is not None
+        else preco_atual
+    )
+
+    # 3. O último preço real ANTES desta execução (pegando o segundo mais recente do banco)
+    cursor.execute(
+        """
+        SELECT preco FROM historico_precos
+        WHERE produto_id = ?
+        ORDER BY data_coleta DESC LIMIT 1 OFFSET 1
+    """,
+        (produto_id,),
+    )
+    resultado_ultimo = cursor.fetchone()
+    ultimo_preco = (
+        resultado_ultimo[0]
+        if resultado_ultimo and resultado_ultimo[0] is not None
+        else preco_atual
+    )
+
+    conn.close()
+
+    alerta_disparado = False
+    motivos = []
+
+    if preco_atual < menor_historico:
+        alerta_disparado = True
+        motivos.append("📉 Menor preço histórico registrado!")
+
+    if preco_atual < media_30d and preco_atual < ultimo_preco:
+        alerta_disparado = True
+        motivos.append(f"📊 Abaixo da média de 30 dias (R$ {media_30d:.2f}).")
+
+    return alerta_disparado, motivos

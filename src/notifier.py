@@ -23,4 +23,22 @@ def enviar_mensagem_telegram(mensagem: str) -> None:
         response.raise_for_status()
         print("-> Mensagem enviada com sucesso no Telegram!")
     except Exception:
-        print(f"-> Erro ao enviar mensagem no Telegram.")
+        print("-> Erro ao enviar mensagem no Telegram.")
+
+
+def notificar_promocao(
+    produto_nome: str, preco_atual: float, url_produto: str, motivos: list
+) -> None:
+    """Formata a mensagem de alerta inteligente combinando os motivos da queda e o link de afiliado."""
+    motivos_str = "\n".join([f"• {m}" for m in motivos])
+
+    mensagem = (
+        f"🚨 <b>ALERTA DE OPORTUNIDADE: SKINCARE</b>\n\n"
+        f"<b>{produto_nome}</b>\n\n"
+        f"💰 <b>Preço Atual:</b> R$ {preco_atual:.2f}\n\n"
+        f"<b>Por que vale a pena:</b>\n"
+        f"{motivos_str}\n\n"
+        f"🔗 <a href='{url_produto}'>Compre Aqui</a>"
+    )
+
+    enviar_mensagem_telegram(mensagem)
