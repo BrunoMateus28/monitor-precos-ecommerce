@@ -39,6 +39,6 @@ jobs:
         run: |
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-          git add *.db
+          git add -f *.db
           git commit -m "chore(db): atualiza histórico de preços via GitHub Actions [skip ci]" || echo "Nenhuma mudança no banco de dados."
           git push
