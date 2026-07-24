@@ -1,5 +1,4 @@
-```markdown
-# 🛒 Serverless Price Monitor Pipeline
+ 🛒 Serverless Price Monitor Pipeline
 
 Um pipeline de dados autônomo e de custo zero (Serverless) desenvolvido para extrair, armazenar e alertar sobre flutuações de preços em e-commerces.
 
@@ -63,5 +62,3 @@ python main.py
 ## 🔒 Segurança
 
 As credenciais de produção não são versionadas. O projeto utiliza a biblioteca `python-dotenv` para desenvolvimento local e o gerenciamento de **GitHub Secrets** para a injeção segura de chaves de API durante a execução do workflow na nuvem. Um hook de `pre-commit` está configurado para impedir o vazamento acidental de chaves privadas no código-fonte.
-
-```
