@@ -1,4 +1,4 @@
- 🛒 Serverless Price Monitor Pipeline
+# 🛒 Serverless Price Monitor Pipeline
 
 Um pipeline de dados autônomo e de custo zero (Serverless) desenvolvido para extrair, armazenar e alertar sobre flutuações de preços em e-commerces.
 
