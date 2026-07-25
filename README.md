@@ -9,25 +9,28 @@ Este projeto demonstra a aplicação prática de Engenharia de Dados, CI/CD, Web
 O sistema foi desenhado para rodar 100% na nuvem sem necessidade de infraestrutura dedicada (como instâncias EC2 ou bancos de dados gerenciados pagos).
 
 * **Orquestração & CI/CD:** GitHub Actions (Cron Jobs)
+* **Ingestão Dinâmica:** Google Sheets API (Exportação pública via CSV)
 * **Extração de Dados:** Python (`requests`, `BeautifulSoup`, JSON-LD)
 * **Armazenamento:** SQLite3 local persistido com histórico de preços relacional
 * **Mensageria:** API do Telegram para alertas em tempo real
 
 ## ⚙️ Fluxo de Execução (ETL) & Inteligência de Alerta
 
-1. **Extract (Extração Resiliente):** O script lê uma lista de URLs curadas cadastradas no banco e faz requisições HTTP utilizando rotação de User-Agents para evitar bloqueios. O motor busca por tags de dados estruturados padronizadas (`Schema.org/Product` via `JSON-LD`) ou seletores de fallback.
-2. **Transform (Limpeza):** Os valores brutos coletados são parseados e sanitizados com expressões regulares (RegEx) para garantir o formato numérico correto em reais (BRL).
-3. **Load (Carga):** A nova medição é registrada na tabela de histórico de preços do banco `database.db`.
-4. **Alert (Regras de Negócio Inteligentes):** O banco de dados avalia o comportamento histórico do produto. O alerta via Telegram só é disparado se o preço atual atender simultaneamente aos critérios de oportunidade:
-   * Estar **abaixo da média de preço dos últimos 30 dias**;
-   * Estar **mais barato do que o último registro salvo** (evitando falsos positivos e garantindo tendência de queda real).
-5. **State Persistence:** Para manter o custo de nuvem zerado, o fluxo do GitHub Actions comita o arquivo do banco de dados atualizado de volta no repositório ao fim de cada ciclo.
+1. **Sincronização de Itens:** O pipeline inicia fazendo o download dinâmico de um arquivo CSV gerado via Google Sheets público. Os novos produtos (nomes e URLs) são inseridos ou ignorados (se já existentes) diretamente no banco relacional `database.db`. Isso elimina a necessidade de alterar o código para modificar os itens monitorados.
+2. **Extract (Extração Resiliente):** O script varre as URLs ativas usando rotação de User-Agents para contornar bloqueios de WAF. O motor prioriza dados estruturados padronizados (`Schema.org/Product` via `JSON-LD`) para capturar o preço sem quebrar por mudanças visuais no HTML do e-commerce.
+3. **Transform (Limpeza):** Os valores brutos coletados são higienizados usando expressões regulares (RegEx), tratando formatações regionais e garantindo a tipagem flutuante em reais (BRL).
+4. **Load (Carga):** O preço capturado é gravado na tabela `historico_precos`.
+5. **Alert (Regras Inteligentes baseadas em Séries Temporais):** A regra de negócio analisa o comportamento do preço ignorando o registro atual que acabou de entrar (usando `OFFSET 1` na query). O alerta via Telegram só é disparado se o valor atual for menor que:
+   * O **menor preço histórico** já registrado; ou
+   * A **média de preço dos últimos 30 dias** simultaneamente com o **último preço coletado** anterior (garantindo uma curva real de queda).
+6. **State Persistence:** O GitHub Actions realiza o commit silencioso do arquivo `database.db` atualizado de volta para o repositório, mantendo o estado do histórico vivo sem custos.
 
 ## 🚀 Como Executar Localmente
 
 ### Pré-requisitos
 * Python 3.11+
 * Token de um Bot do Telegram e o Chat ID de destino.
+* URL de publicação em CSV de uma planilha do Google Sheets.
 
 ### Passos
 1. Clone o repositório:
@@ -53,7 +56,15 @@ pip install -r requirements.txt
 ```
 
 4. Configure as chaves de ambiente:
-Crie um arquivo `.env` na raiz do projeto baseado no `.env.template` e insira suas credenciais do Telegram.
+Crie um arquivo `.env` na raiz do projeto baseado no `.env.template` e insira suas credenciais:
+
+```env
+TELEGRAM_TOKEN="seu_token_aqui"
+TELEGRAM_CHAT_ID="seu_chat_id_aqui"
+GOOGLE_SHEETS_CSV_URL="[https://docs.google.com/spreadsheets/d/e/.../pub?output=csv](https://docs.google.com/spreadsheets/d/e/.../pub?output=csv)"
+
+```
+
 5. Execute o pipeline:
 
 ```bash
